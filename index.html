@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>🐧ペンギンアイスパズルDX</title>
+
+<style>
+*{
+margin:0;
+padding:0;
+box-sizing:border-box;
+-webkit-tap-highlight-color:transparent;
+}
+
+html,body{
+width:100%;
+height:100%;
+overflow:hidden;
+font-family:sans-serif;
+background:#0b2740;
+color:#fff;
+}
+
+body.fever{
+animation:rainbow 3s linear infinite;
+}
+
+.screen{
+width:100%;
+height:100%;
+display:none;
+flex-direction:column;
+justify-content:center;
+align-items:center;
+padding:16px;
+}
+
+.screen.active{
+display:flex;
+}
+
+h1{
+font-size:min(12vw,60px);
+text-align:center;
+margin-bottom:20px;
+}
+
+.info{
+text-align:center;
+line-height:1.7;
+margin-bottom:20px;
+max-width:500px;
+}
+
+button{
+position:relative;
+z-index:2000;
+padding:14px 30px;
+font-size:20px;
+border:none;
+border-radius:16px;
+background:#4fc3f7;
+color:#003049;
+font-weight:bold;
+cursor:pointer;
+touch-action:manipulation;
+}
+
+#gameScreen{
+justify-content:flex-start;
+}
+
+#hud{
+width:100%;
+max-width:520px;
+display:flex;
+justify-content:space-between;
+font-size:20px;
+margin-bottom:10px;
+}
+
+#gameArea{
+width:min(95vw,520px);
+height:min(95vw,520px);
+display:grid;
+gap:4px;
+padding:4px;
+background:#9fdfff;
+border-radius:18px;
+touch-action:none;
+}
+
+.cell{
+background:#ecfbff;
+border-radius:12px;
+display:flex;
+justify-content:center;
+align-items:center;
+font-size:min(8vw,42px);
+user-select:none;
+touch-action:none;
+}
+
+.selected{
+outline:4px solid gold;
+}
+
+#tutorial{
+position:fixed;
+top:50%;
+left:50%;
+transform:translate(-50%,-50%);
+background:rgba(0,0,0,.85);
+padding:20px;
+border-radius:18px;
+font-size:22px;
+text-align:center;
+z-index:999;
+pointer-events:none;
+animation:fade 5s forwards;
+}
+
+.effect{
+position:fixed;
+left:50%;
+top:40%;
+transform:translateX(-50%);
+font-size:min(10vw,48px);
+font-weight:bold;
+color:#ffd700;
+text-shadow:0 0 20px yellow;
+z-index:1000;
+pointer-events:none;
+animation:pop 1.5s forwards;
+}
+
+#resultScore{
+font-size:28px;
+margin:20px;
+text-align:center;
+line-height:1.7;
+}
+
+.danger{
+animation:dangerFlash .5s infinite;
+}
+
+@keyframes pop{
+0%{
+transform:translateX(-50%) scale(.3);
+opacity:0;
+}
+25%{
+opacity:1;
+}
+50%{
+transform:translateX(-50%) scale(1.3);
+}
+100%{
+transform:translateX(-50%) scale(1);
+opacity:0;
+}
+}
+
+@keyframes fade{
+0%{opacity:1;}
+80%{opacity:1;}
+100%{opacity:0;}
+}
+
+@keyframes rainbow{
+0%{filter:hue-rotate(0deg);}
+100%{filter:hue-rotate(360deg);}
+}
+
+@keyframes dangerFlash{
+0%{background:#0b2740;}
+50%{background:#700000;}
+100%{background:#0b2740;}
+}
+</style>
+</head>
+
+<body>
+
+<div id="startScreen" class="screen active">
+
+<h1>🐧<br>ペンギンアイスパズルDX</h1>
+
+<div class="info">
+同じ絵柄を3つ以上そろえよう！<br><br>
+
+① マスをタッチ<br>
+② 上下左右にスワイプ<br>
+③ 隣のマスと交換<br><br>
+
+🐧🐧🐧 → 消える！<br>
+🔥 コンボで高得点！<br>
+👑 4個以上でボーナス！
+</div>
+
+<button id="startBtn">スタート</button>
+
+</div>
+
+<div id="gameScreen" class="screen">
+
+<div id="hud">
+<div>スコア: <span id="score">0</span></div>
+<div>残り: <span id="time">60</span>秒</div>
+</div>
+
+<div id="gameArea"></div>
+
+</div>
+
+<div id="resultScreen" class="screen">
+
+<h1>🏆 結果</h1>
+
+<div id="resultScore"></div>
+
+<button id="retryBtn">もう一度遊ぶ</button>
+
+</div>
+
+<script>
+const SIZE=6;
+const ITEMS=["🐧","🐟","🧊","❄️","🌊"];
+
+let board=[];
+let score=0;
+let timeLeft=60;
+let timer=null;
+let combo=0;
+let fever=false;
+
+let startCell=null;
+
+const gameArea=document.getElementById("gameArea");
+
+const startScreen=document.getElementById("startScreen");
+const gameScreen=document.getElementById("gameScreen");
+const resultScreen=document.getElementById("resultScreen");
+
+function showScreen(screen){
+document.querySelectorAll(".screen")
+.forEach(v=>v.classList.remove("active"));
+
+screen.classList.add("active");
+}
+
+function randomItem(){
+return ITEMS[Math.floor(Math.random()*ITEMS.length)];
+}
+
+function createBoard(){
+
+board=[];
+
+for(let r=0;r<SIZE;r++){
+
+board[r]=[];
+
+for(let c=0;c<SIZE;c++){
+board[r][c]=randomItem();
+}
+
+}
+}
+
+function drawBoard(){
+
+gameArea.innerHTML="";
+
+gameArea.style.gridTemplateColumns=
+`repeat(${SIZE},1fr)`;
+
+for(let r=0;r<SIZE;r++){
+
+for(let c=0;c<SIZE;c++){
+
+const cell=document.createElement("div");
+cell.className="cell";
+cell.textContent=board[r][c];
+
+cell.addEventListener("pointerdown",(e)=>{
+
+startCell={
+r:r,
+c:c,
+x:e.clientX,
+y:e.clientY
+};
+
+cell.classList.add("selected");
+});
+
+cell.addEventListener("pointerup",(e)=>{
+
+document.querySelectorAll(".selected")
+.forEach(v=>v.classList.remove("selected"));
+
+if(!startCell) return;
+
+let nr=startCell.r;
+let nc=startCell.c;
+
+const dx=e.clientX-startCell.x;
+const dy=e.clientY-startCell.y;
+
+if(Math.abs(dx)>Math.abs(dy)){
+
+if(dx>20) nc++;
+if(dx<-20) nc--;
+
+}else{
+
+if(dy>20) nr++;
+if(dy<-20) nr--;
+
+}
+
+if(
+nr>=0 &&
+nr<SIZE &&
+nc>=0 &&
+nc<SIZE &&
+(nr!==startCell.r || nc!==startCell.c)
+){
+swap(startCell.r,startCell.c,nr,nc);
+}
+
+startCell=null;
+
+});
+
+gameArea.appendChild(cell);
+
+}
+
+}
+
+}
+
+function swap(r1,c1,r2,c2){
+
+[board[r1][c1],board[r2][c2]]=
+[board[r2][c2],board[r1][c1]];
+
+let matches=findMatches();
+
+if(matches.length===0){
+
+[board[r1][c1],board[r2][c2]]=
+[board[r2][c2],board[r1][c1]];
+
+}else{
+
+combo=0;
+processMatches(matches);
+
+}
+
+drawBoard();
+}
+
+function findMatches(){
+
+const matched=[];
+
+for(let r=0;r<SIZE;r++){
+
+let count=1;
+
+for(let c=1;c<=SIZE;c++){
+
+if(c<SIZE && board[r][c]===board[r][c-1]){
+
+count++;
+
+}else{
+
+if(count>=3){
+
+for(let k=0;k<count;k++){
+matched.push([r,c-1-k]);
+}
+
+}
+
+count=1;
+}
+
+}
+
+}
+
+for(let c=0;c<SIZE;c++){
+
+let count=1;
+
+for(let r=1;r<=SIZE;r++){
+
+if(r<SIZE && board[r][c]===board[r-1][c]){
+
+count++;
+
+}else{
+
+if(count>=3){
+
+for(let k=0;k<count;k++){
+matched.push([r-1-k,c]);
+}
+
+}
+
+count=1;
+}
+
+}
+
+}
+
+return matched;
+}
+
+function showEffect(text){
+
+const div=document.createElement("div");
+div.className="effect";
+div.textContent=text;
+
+document.body.appendChild(div);
+
+setTimeout(()=>{
+div.remove();
+},1500);
+}
+
+function flash(){
+
+document.body.animate([
+{filter:"brightness(2)"},
+{filter:"brightness(1)"}
+],{
+duration:250
+});
+}
+
+function processMatches(matches){
+
+combo++;
+
+const unique=
+[...new Set(matches.map(v=>v.join(",")))]
+.map(v=>v.split(",").map(Number));
+
+let gain=unique.length*10;
+
+if(fever){
+gain*=2;
+}
+
+if(combo>=2){
+
+gain+=combo*20;
+showEffect("🔥 "+combo+" COMBO!");
+
+}
+
+if(unique.length>=4){
+
+gain+=50;
+showEffect("👑 キングペンギン!");
+
+}
+
+if(unique.length>=6){
+
+flash();
+showEffect("💥 GREAT!");
+
+}
+
+score+=gain;
+
+document.getElementById("score").textContent=score;
+
+if(score>=500 && !fever){
+
+fever=true;
+
+document.body.classList.add("fever");
+
+showEffect("🔥 FEVER TIME 🔥");
+
+}
+
+unique.forEach(([r,c])=>{
+board[r][c]=null;
+});
+
+for(let c=0;c<SIZE;c++){
+
+let stack=[];
+
+for(let r=SIZE-1;r>=0;r--){
+
+if(board[r][c]!==null){
+stack.push(board[r][c]);
+}
+
+}
+
+for(let r=SIZE-1;r>=0;r--){
+
+board[r][c]=
+stack[SIZE-1-r] || randomItem();
+
+}
+
+}
+
+const chain=findMatches();
+
+if(chain.length){
+processMatches(chain);
+}
+
+}
+
+function showTutorial(){
+
+const t=document.createElement("div");
+
+t.id="tutorial";
+
+t.innerHTML=
+"⬅️➡️⬆️⬇️<br>スワイプして交換！<br><br>🐧を3つ以上並べよう";
+
+document.body.appendChild(t);
+
+setTimeout(()=>{
+if(t.parentNode){
+t.remove();
+}
+},5000);
+
+}
+
+function startGame(){
+
+score=0;
+timeLeft=60;
+combo=0;
+fever=false;
+
+clearInterval(timer);
+
+document.body.classList.remove("fever");
+document.body.classList.remove("danger");
+
+document.getElementById("score").textContent="0";
+document.getElementById("time").textContent="60";
+
+createBoard();
+
+drawBoard();
+
+showScreen(gameScreen);
+
+showTutorial();
+
+timer=setInterval(()=>{
+
+timeLeft--;
+
+document.getElementById("time").textContent=timeLeft;
+
+if(timeLeft<=10){
+document.body.classList.add("danger");
+}
+
+if(timeLeft<=0){
+endGame();
+}
+
+},1000);
+
+}
+
+function endGame(){
+
+clearInterval(timer);
+
+let rank="C";
+
+if(score>=300) rank="B";
+if(score>=600) rank="A";
+if(score>=1000) rank="S";
+if(score>=1500) rank="SS";
+
+document.getElementById("resultScore").innerHTML=
+`
+最終スコア<br>
+<b>${score}</b><br><br>
+🏆 ランク ${rank}
+`;
+
+showScreen(resultScreen);
+}
+
+document.getElementById("startBtn")
+.addEventListener("click",startGame);
+
+document.getElementById("retryBtn")
+.addEventListener("click",startGame);
+</script>
+
+</body>
+</html>
